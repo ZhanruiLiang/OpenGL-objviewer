@@ -16,6 +16,7 @@ import Graphics.Rendering.OpenGL hiding (Object)
 import Graphics.UI.GLFW as GLFW
 
 import BufTypes
+import HalfEdge
 import Utils
 
 -- | Material data type
@@ -83,9 +84,10 @@ loadMtllib path = do
 -- | Object data type
 data Object = Object {
     objName :: String
-  , objBuffers :: CBuffers
+  -- , objBuffers :: CBuffers
+  , objHS :: HStructure
   , objMaterial :: Maybe Material
-} deriving (Show)
+}
 
 -- | Model data type
 type Model = [Object]
@@ -100,7 +102,8 @@ emptyModel = []
 
 data ModelState = ModelState {
     mstVBuffers :: VBuffers
-  , mstIBuffers :: IBuffers
+  , mstIFaces :: [IFace]
+  -- , mstIBuffers :: IBuffers
   , mstMtllib :: Maybe Mtllib
   , mstMaterial :: Maybe Material
   , mstObjName :: String
@@ -109,7 +112,8 @@ data ModelState = ModelState {
 
 emptyMst = ModelState {
     mstVBuffers = emptyVbufs
-  , mstIBuffers = emptyIbufs
+  -- , mstIBuffers = emptyIbufs
+  , mstIFaces = []
   , mstMtllib = Nothing
   , mstMaterial = Nothing
   , mstObjName = ""
@@ -128,11 +132,13 @@ loadModel path = do
                  else model
         obj = Object {
             objName = mstObjName s
-          , objBuffers = makeObjBuffer (mstVBuffers s) (mstIBuffers s)
+          -- , objBuffers = makeObjBuffer (mstVBuffers s) (mstIBuffers s)
+          , objHS = fromIndexSet (mstVBuffers s) (mstIFaces s)
           , objMaterial = mstMaterial s
         }
       in s { 
-            mstIBuffers = emptyIbufs
+            -- mstIBuffers = emptyIbufs
+            mstIFaces = []
           , mstModel = model'
         }
     parseLine :: ModelState -> String -> IO ModelState
@@ -162,16 +168,19 @@ loadModel path = do
           return $ s { mstMtllib = Just mtllib }
         -- f i1 i2 i3 # triangle faces
         "f" | length args == 3 -> 
-                return$ foldl (\s g->appendIbuf (conv g) s) s (map (splitBy '/') args)
+                -- return$ foldl (\s g->appendIbuf (conv g) s) s (map (splitBy '/') args)
+                return$ appendFace (map conv. map (splitBy '/') $ args) s
             | otherwise -> error "Not a triangular face"
               where 
-                conv [v, t, n] = (sconv v, sconv t, sconv n)
-                conv g = error $ "invalid index tuple number:" ++ show g
+                conv [v, t, n] = (fromJust.sconv $v, sconv t, sconv n)
+                conv g = error $ "invalid index tuple length:" ++ show g
                 sconv "" = Nothing 
-                sconv s = Just $ (read s :: Int)
+                -- sconv s = Just $ (read s :: Int)
+                sconv s = Just $ (read s - 1 :: Int)
         otherwise -> return s
     appendVbuf x s = s { mstVBuffers = bufferAppend x (mstVBuffers s) }
-    appendIbuf x s = s { mstIBuffers = bufferAppend x (mstIBuffers s) }
+    -- appendIbuf x s = s { mstIBuffers = bufferAppend x (mstIBuffers s) }
+    appendFace f s = s { mstIFaces = f : mstIFaces s }
 
 splitBy :: Char -> String -> [String]
 splitBy delimiter = foldr f [[]] where 

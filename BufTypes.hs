@@ -1,4 +1,16 @@
-module BufTypes where
+module BufTypes (
+      IBuffer
+    , IBuffers
+    , IFace
+    , Vertex3, TexCoord2, Normal3, GLfloat
+    , VBuffers , VBuffer , VertexBuffer , TexCoordBuffer , NormalBuffer
+    , CBuffers , CBuffer , CVertexBuffer , CTexCoordBuffer , CNormalBuffer
+    , convVbufToCbuf
+    , emptyVbufs
+    , emptyIbufs
+    , bufferAppend
+    , pick
+    )where
 import Graphics.Rendering.OpenGL hiding (Object, index)
 import Data.Sequence
 
@@ -16,6 +28,8 @@ type CVertexBuffer = CBuffer (Vertex3 GLfloat)
 type CTexCoordBuffer = CBuffer (TexCoord2 GLfloat)
 type CNormalBuffer = CBuffer (Normal3 GLfloat)
 type CBuffer a = [a]
+
+type IFace = [(Int, Maybe Int, Maybe Int)]
 
 convVbufToCbuf :: VBuffer a -> CBuffer a
 convVbufToCbuf s = case viewl s of 

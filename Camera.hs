@@ -7,6 +7,7 @@ module Camera (
   )where
 import Graphics.Rendering.OpenGL
 import ObjRead
+import HalfEdge
 import Config as C
 
 data Camera = Camera {
@@ -67,7 +68,8 @@ boundingBox model = (
     getX (Vertex3 x _ _) = x
     getY (Vertex3 _ y _) = y
     getZ (Vertex3 _ _ z) = z
-    vlist obj = getVs.objBuffers$ obj
+    -- vlist obj = getVs.objBuffers$ obj
+    vlist obj = allVertices.objHS $ obj
     getVs (v, _, _) = v
     x1 = mL min.map getX.concat.map vlist$ model
     y1 = mL min.map getY.concat.map vlist$ model

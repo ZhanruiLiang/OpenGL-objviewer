@@ -14,6 +14,7 @@ import Camera
 import State
 import Menu
 import Config
+import HalfEdge
 
 defaultObjColor = Color4 0.2 0.2 0.3 (1.0 :: GLfloat)
 
@@ -32,21 +33,15 @@ renderObj state obj = do
       when (stTextureEnable state) $ do
         textureBinding Texture2D $= mtlImage material
       
-    renderPrimitive Triangles $ do
-      color defaultObjColor
-      let (vs, ts, ns) = objBuffers obj
-      if (not.null$ ts) && hasMat then
-        forM_ (zip3 vs ts ns) (\(v, t, n) -> do
-          texCoord t
-          normal n
-          vertex v
-          )
-      else 
-        forM_ (zip vs ns) (\(v, n) -> do
-          normal n
-          vertex v
-          )
-      return ()
+    color defaultObjColor
+    renderHStruture.objHS $ obj
+    -- renderPrimitive Triangles $ do
+    --   let (vs, ts, ns) = objBuffers obj
+    --   if (not.null$ ts) && hasMat then
+    --     forM_ (zip3 vs ts ns) (\(v, t, n) -> texCoord t >> normal n >> vertex v )
+    --   else 
+    --     forM_ (zip vs ns) (\(v, n) -> normal n >> vertex v)
+    --   return ()
 
 display state = do
   let cam = stCamera state
@@ -85,7 +80,7 @@ glInit = do
   depthFunc $= Just Less
   lighting $= Enabled
   light (Light 0) $= Enabled
-  let r = 20.0 :: GLfloat
+  let r = 80.0 :: GLfloat
   position (Light 0) $= Vertex4 r r r 1.0
   normalize $= Enabled
 
@@ -100,8 +95,8 @@ loadModel' state path = do
 main = do
   glInit
   initState defaultState
-  initMenu defaultState
-  mainLoop =<< loadModel' defaultState defaultModelPath
+  let state = defaultState
+  mainLoop =<< loadModel' state defaultModelPath
   GLFW.closeWindow
   GLFW.terminate
 
