@@ -1,9 +1,10 @@
 module Camera (
     Camera(..)
-  , modifyStack
+  , withCamera
   , adjustCam
   , defaultCamera
   , zoom
+  , rotateCam
   )where
 import Graphics.Rendering.OpenGL
 import ObjRead
@@ -14,12 +15,14 @@ data Camera = Camera {
     eyePos :: Vertex3 GLdouble
   , centerPos :: Vertex3 GLdouble
   , camScale :: GLfloat
+  , camAngle :: GLfloat
 }
 
 defaultCamera = Camera {
     eyePos = Vertex3 1.0 1.0 1.0
   , centerPos = Vertex3 0.0 0.0 0.0
   , camScale = 1.0
+  , camAngle = 0
 }
 
 -- instance Num a => Num (Vector3 a) where
@@ -27,19 +30,22 @@ defaultCamera = Camera {
 --   (Vector3 x y z) - (Vector3 x' y' z') = Vector3 (x-x') (y-y') (z-z')
 
 negate' (Vector3 x y z) = Vector3 (-x) (-y) (-z)
-
-originVec = Vector3 0.0 0.0 0.0
-
+-- originVec = Vector3 0.0 0.0 0.0
 verToVec (Vertex3 x y z) = Vector3 x y z
 
-modifyStack :: Camera -> IO ()
-modifyStack cam = do
+withCamera :: Camera -> IO () -> IO ()
+withCamera cam action = preservingMatrix $ do
   let r = camScale cam
       cp = centerPos cam
       ep = eyePos cam
       up = Vector3 0.0 0.0 1.0
+      angle = camAngle cam
   lookAt ep cp up
+  translate $ (verToVec cp)
+  rotate angle (Vector3 0 0 1)
+  translate $ negate' (verToVec cp)
   scale r r r
+  action
   -- translate $ negate' (verToVec cp)
 
 lookAt' e c u = lookAt (conv e) (conv c) (conv' u) where
@@ -80,3 +86,7 @@ boundingBox model = (
 
 zoom cam scale = cam { camScale = scale' }
   where scale' = max C.minScale  (min C.maxScale scale)
+
+rotateCam cam dAngle = cam { camAngle = a' }
+  where a' = a + dAngle
+        a = camAngle cam

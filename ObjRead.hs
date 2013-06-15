@@ -8,16 +8,17 @@ module ObjRead (
 import Data.Maybe
 import Control.Monad
 import System.FilePath
-import Foreign (Ptr, newArray, nullPtr)
+import Foreign (Ptr, newArray)
 import qualified Data.Array.IArray as IA
 import qualified Data.Map.Lazy as M
 import qualified Data.Sequence as S
-import Graphics.Rendering.OpenGL hiding (Object)
+import Graphics.Rendering.OpenGL
 import Graphics.UI.GLFW as GLFW
 
 import BufTypes
 import HalfEdge
 import Utils
+import System.TimeIt
 
 -- | Material data type
 data Material = Material {
@@ -44,7 +45,9 @@ loadImage :: FilePath -> IO Image
 loadImage path = do
   [texName] <- genObjectNames 1
   textureBinding Texture2D $= Just texName
-  GLFW.loadTexture2D path [BuildMipMaps]
+  loaded <- GLFW.loadTexture2D path [BuildMipMaps]
+  if loaded then putStrLn $ "loaded " ++ path
+  else putStrLn $ "failed to load " ++ path
   textureFilter Texture2D $= ((Linear', Just Linear'), Linear')
   return texName
         
@@ -79,13 +82,14 @@ loadMtllib path = do
           let imagePath = joinPath [dir, name]
           image <- loadImage imagePath
           return (mtl { mtlImage = Just image }, lib)
-        otherwise -> return (mtl, lib)
+        _ -> return (mtl, lib)
 
 -- | Object data type
 data Object = Object {
     objName :: String
   -- , objBuffers :: CBuffers
   , objHS :: HStructure
+  , objRender :: IO ()
   , objMaterial :: Maybe Material
 }
 
@@ -103,7 +107,6 @@ emptyModel = []
 data ModelState = ModelState {
     mstVBuffers :: VBuffers
   , mstIFaces :: [IFace]
-  -- , mstIBuffers :: IBuffers
   , mstMtllib :: Maybe Mtllib
   , mstMaterial :: Maybe Material
   , mstObjName :: String
@@ -112,7 +115,6 @@ data ModelState = ModelState {
 
 emptyMst = ModelState {
     mstVBuffers = emptyVbufs
-  -- , mstIBuffers = emptyIbufs
   , mstIFaces = []
   , mstMtllib = Nothing
   , mstMaterial = Nothing
@@ -120,75 +122,76 @@ emptyMst = ModelState {
   , mstModel = emptyModel
 }
 
+addObject' allowNull s = if allowNull || (not.null.mstObjName$ s) then do
+      let hs = fromIndexSet (mstVBuffers s) (mstIFaces s)
+      debug $ "makeInterleave"
+      (n, ita) <- timeIt $ makeInterleave (hsFaces hs)
+      indices <- newArray $ if n > 0 then [0..fromIntegral (n-1)::GLuint] else []
+      let obj = Object {
+              objRender = render ita n indices 
+            , objName = mstObjName s
+            , objHS = hs
+            , objMaterial = mstMaterial s }
+          model' = addObject obj (mstModel s)
+      return s { 
+            mstIFaces = []
+          , mstModel = model'
+        }
+  else return s {mstIFaces = []}
+
+render :: Ptr GLfloat -> GLsizei -> Ptr GLuint -> IO ()
+render a n idx = do
+  interleavedArrays T2fN3fV3f 0 a
+  drawElements Triangles n UnsignedInt idx
+
 loadModel :: FilePath -> IO Model
 loadModel path = do
     datas <- readFile path
     s <- foldM parseLine emptyMst (lines datas)
-    return $ mstModel (addObject' True s)
+    mstModel `liftM` (addObject' True s)
   where 
-    addObject' allowNull s = let
-        model = mstModel s
-        model' = if allowNull || (not.null.mstObjName$ s) then addObject obj model
-                 else model
-        obj = Object {
-            objName = mstObjName s
-          -- , objBuffers = makeObjBuffer (mstVBuffers s) (mstIBuffers s)
-          , objHS = fromIndexSet (mstVBuffers s) (mstIFaces s)
-          , objMaterial = mstMaterial s
-        }
-      in s { 
-            -- mstIBuffers = emptyIbufs
-            mstIFaces = []
-          , mstModel = model'
-        }
     parseLine :: ModelState -> String -> IO ModelState
     parseLine s line = let
       (cmd, args) = (head toks, tail toks)
       toks = words line
       mtllib = fromJust$ mstMtllib s
-      in case cmd of
+      flushObj s args = do
+          s' <- addObject' False s
+          return s' { mstObjName = head args }
+      in return =<< case cmd of
         -- o objName
-        "o" -> return $ (addObject' False s) { mstObjName = head args }
-        "g" -> return $ (addObject' False s) { mstObjName = head args }
+        "o" -> flushObj s args
+        "g" -> flushObj s args
         -- usemtl mtlName
         "usemtl" -> return s { mstMaterial = lookupMaterial mtllib (args!!0) }
         -- v x y z
         "v" -> let [x, y, z] = map read $ take 3 args
-          in return $ appendVbuf (Just$Vertex3 x y z, Nothing, Nothing) s 
+          in return$ appendVbuf (Just$Vertex3 x y z, Nothing, Nothing) s
         -- vn nx ny nz
         "vn" -> let [x, y, z] = map read $take 3 args
-          in return $ appendVbuf (Nothing, Nothing, Just$Normal3 x y z) s 
+          in return$ appendVbuf (Nothing, Nothing, Just$Normal3 x y z) s 
         -- vt tx ty
         "vt" -> let [x, y] = map read $ take 2 args
-          in return $ appendVbuf (Nothing, Just$TexCoord2 x y, Nothing) s 
+          in return$ appendVbuf (Nothing, Just$TexCoord2 x y, Nothing) s 
         -- mtllib libName
         "mtllib" -> do
           let dir = fst.splitFileName $ path
           mtllib <- loadMtllib (joinPath [dir, args!!0])
-          return $ s { mstMtllib = Just mtllib }
+          return$ s { mstMtllib = Just mtllib }
         -- f i1 i2 i3 # triangle faces
-        "f" | length args == 3 -> 
-                -- return$ foldl (\s g->appendIbuf (conv g) s) s (map (splitBy '/') args)
+        "f" | length args == 3 -> do
                 return$ appendFace (map conv. map (splitBy '/') $ args) s
             | otherwise -> error "Not a triangular face"
               where 
                 conv [v, t, n] = (fromJust.sconv $v, sconv t, sconv n)
                 conv g = error $ "invalid index tuple length:" ++ show g
                 sconv "" = Nothing 
-                -- sconv s = Just $ (read s :: Int)
                 sconv s = Just $ (read s - 1 :: Int)
-        otherwise -> return s
+        _ -> return s
     appendVbuf x s = s { mstVBuffers = bufferAppend x (mstVBuffers s) }
-    -- appendIbuf x s = s { mstIBuffers = bufferAppend x (mstIBuffers s) }
-    appendFace f s = s { mstIFaces = f : mstIFaces s }
+    appendFace f s = s { mstIFaces = f : mstIFaces s}
 
 splitBy :: Char -> String -> [String]
 splitBy delimiter = foldr f [[]] where 
   f c l@(x:xs) | c == delimiter = []:l
                | otherwise = (c:x):xs 
-
-makeObjBuffer :: VBuffers -> IBuffers -> CBuffers
-makeObjBuffer (vs0, ts0, ns0) (vi, ti, ni) = (vs, ts, ns) 
-  where vs = pick vs0 vi
-        ts = pick ts0 ti
-        ns = pick ns0 ni

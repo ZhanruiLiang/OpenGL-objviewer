@@ -1,11 +1,23 @@
 PROGRAM = Main
 OBJS = Main.o ObjRead.o
+FLAGS = -O3 
+SRCS = Main.hs ObjRead.hs BufTypes.hs Camera.hs State.hs Utils.hs Menu.hs Config.hs HalfEdge.hs
+
 
 test: Main
 	./Main
 
-Main: Main.hs ObjRead.hs BufTypes.hs Camera.hs State.hs Utils.hs Menu.hs Config.hs
-	ghc Main.hs
+profile: MainP
+	./MainP +RTS -p
+
+Main: $(SRCS)
+	ghc Main.hs $(FLAGS)
+
+MainP: $(SRCS)
+	ghc Main.hs -o MainP $(FLAGS) -rtsopts -prof -auto-all
+
+clean: 
+	-rm Main MainP *.o
 
 # all: build
 # 

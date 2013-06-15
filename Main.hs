@@ -16,7 +16,6 @@ import Menu
 import Config
 import HalfEdge
 
-defaultObjColor = Color4 0.2 0.2 0.3 (1.0 :: GLfloat)
 
 renderObj :: State -> Object -> IO ()
 renderObj state obj = do
@@ -34,7 +33,8 @@ renderObj state obj = do
         textureBinding Texture2D $= mtlImage material
       
     color defaultObjColor
-    renderHStruture.objHS $ obj
+    -- renderHStruture.objHS $ obj
+    objRender obj
     -- renderPrimitive Triangles $ do
     --   let (vs, ts, ns) = objBuffers obj
     --   if (not.null$ ts) && hasMat then
@@ -47,12 +47,12 @@ display state = do
   let cam = stCamera state
   clear [ColorBuffer, DepthBuffer]
   loadIdentity
-  modifyStack cam
-  preservingMatrix $ do
-    case stModel state of
-      Nothing -> return()
-      Just model -> do
-        forM_ model (renderObj state)
+  withCamera cam $ do
+    preservingMatrix $ do
+      case stModel state of
+        Nothing -> return()
+        Just model -> do
+          forM_ model (renderObj state)
   renderMenu (stMenu state) state
   GLFW.swapBuffers
 
@@ -103,6 +103,9 @@ main = do
 defaultModelPath = "models/emitter.obj"
 
 mainLoop state = do
+  -- if stAutoRotate state 
+  --   then return ()
+  --   else GLFW.waitEvents
   GLFW.waitEvents
   state' <- update state
   when (not.needQuit$ state) $ do
