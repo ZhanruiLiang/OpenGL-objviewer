@@ -3,6 +3,7 @@ module ObjRead (
   , Object(..)
   , Model(..)
   , Material(..)
+  , convertObj
   )where
 
 import Data.Maybe
@@ -122,17 +123,22 @@ emptyMst = ModelState {
   , mstModel = emptyModel
 }
 
+convertObj :: Object -> IO Object
+convertObj obj = do
+  let hs = objHS obj
+  -- debug $ "makeInterleave"
+  (n, ita) <- makeInterleave (hsFaces hs)
+  indices <- newArray $ if n > 0 then [0..fromIntegral (n-1)::GLuint] else []
+  return obj { objRender = render ita n indices }
+
 addObject' allowNull s = if allowNull || (not.null.mstObjName$ s) then do
       let hs = fromIndexSet (mstVBuffers s) (mstIFaces s)
-      debug $ "makeInterleave"
-      (n, ita) <- timeIt $ makeInterleave (hsFaces hs)
-      indices <- newArray $ if n > 0 then [0..fromIntegral (n-1)::GLuint] else []
-      let obj = Object {
-              objRender = render ita n indices 
+      obj <- convertObj $ Object {
+              objRender = return ()
             , objName = mstObjName s
             , objHS = hs
             , objMaterial = mstMaterial s }
-          model' = addObject obj (mstModel s)
+      let model' = addObject obj (mstModel s)
       return s { 
             mstIFaces = []
           , mstModel = model'

@@ -11,11 +11,13 @@ import ObjRead
 import Camera
 import Menu
 import qualified Config as C
+import HalfEdge
 
 data State = State {
     stCamera :: Camera
   , stModel :: Maybe Model
   , stMenu :: Menu
+  , stSubDivTime :: Int
   -- switches
   , stPersp :: Bool
   , stTextureEnable :: Bool
@@ -30,12 +32,13 @@ defaultState = State {
     stCamera = defaultCamera
   , stModel = Nothing
   , stMenu = defaultMenu
+  , stSubDivTime = 0
   -- switches
   , stPersp = True
   , stTextureEnable = False
   , stLightEnable = True
   , stMaterialEnable = False
-  , stWireEnable = False
+  , stWireEnable = True
   , stAutoRotate = True
   , needQuit = False
 }
@@ -55,6 +58,26 @@ initState state = do
     , togglePersp
     ]
 
+subdiv :: State -> IO State
+subdiv s = do
+  debug$ "======================subdiv============="
+  let model = stModel s
+      divTime = stSubDivTime s
+  debug$ "subdiv count: " ++ show divTime
+  model' <- case model of
+    Nothing -> return model
+    Just m  -> return =<< (liftM Just) $ forM m $ \obj -> do
+      let hs = objHS obj
+          hs' = loopSubdiv hs
+      obj' <- convertObj $ obj { objHS = hs' }
+      debug $ "fn = " ++ (show.length.hsFaces$ hs)
+      debug $ "vn = " ++ (show.length.allVertices$ hs)
+      return$! obj'
+  return s { stModel = model', stSubDivTime = (divTime + 1) }
+
+disable a b s = if stSubDivTime s > 0 && a s then return =<< b s else return s
+enable a b s = if stSubDivTime s > 0 && (not.a$ s) then return =<< b s else return s
+
 update :: State -> IO State
 update state = if isNothing (stModel state) then return state
   else let
@@ -62,8 +85,15 @@ update state = if isNothing (stModel state) then return state
     cam = stCamera state
   in do
     wheel <- get GLFW.mouseWheel
+    (Position mouseX mouseY) <- get GLFW.mousePos
+    (Size width height) <- get GLFW.windowSize
     let cam' = zoom cam (1 + 0.05 * fromIntegral wheel)
-        cam'' = if stAutoRotate state  then rotateCam cam' C.rotateSpeed else cam'
+        -- cam'' = if stAutoRotate state  then rotateCam cam' C.rotateSpeed else cam'
+        cam'' = rotateCam cam'  
+            (360 * (fromIntegral mouseX) / (fromIntegral width)) 
+            -- (360 * (0.5 + (fromIntegral mouseY) / (fromIntegral height))) 
+            0
+
         state' = state { stCamera = cam'' }
     state' <- foldM (\s f-> f s) state' [
           onPress 'L' toggleLight
@@ -72,7 +102,13 @@ update state = if isNothing (stModel state) then return state
         , onPress 'P' togglePersp
         , onPress 'W' toggleWire
         , onPress 'Q' (\s-> return s{ needQuit = True })
+        , onPress 'S' subdiv
       ]
+    state' <- enable stWireEnable toggleWire 
+           =<< disable stTextureEnable toggleTexture 
+           =<< disable stLightEnable toggleLight
+           =<< disable stMaterialEnable toggleMaterial
+           state'
     return state'
 
 toggleTexture, toggleLight, toggleMaterial :: State -> IO State

@@ -15,14 +15,16 @@ data Camera = Camera {
     eyePos :: Vertex3 GLdouble
   , centerPos :: Vertex3 GLdouble
   , camScale :: GLfloat
-  , camAngle :: GLfloat
+  , camAngleX :: GLfloat
+  , camAngleY :: GLfloat
 }
 
 defaultCamera = Camera {
     eyePos = Vertex3 1.0 1.0 1.0
   , centerPos = Vertex3 0.0 0.0 0.0
   , camScale = 1.0
-  , camAngle = 0
+  , camAngleX = 0
+  , camAngleY = 0
 }
 
 -- instance Num a => Num (Vector3 a) where
@@ -39,10 +41,10 @@ withCamera cam action = preservingMatrix $ do
       cp = centerPos cam
       ep = eyePos cam
       up = Vector3 0.0 0.0 1.0
-      angle = camAngle cam
   lookAt ep cp up
   translate $ (verToVec cp)
-  rotate angle (Vector3 0 0 1)
+  rotate (camAngleX cam) (Vector3 0 0 1)
+  rotate (camAngleY cam) (Vector3 1 0 0)
   translate $ negate' (verToVec cp)
   scale r r r
   action
@@ -87,6 +89,4 @@ boundingBox model = (
 zoom cam scale = cam { camScale = scale' }
   where scale' = max C.minScale  (min C.maxScale scale)
 
-rotateCam cam dAngle = cam { camAngle = a' }
-  where a' = a + dAngle
-        a = camAngle cam
+rotateCam cam xAngle yAngle = cam { camAngleX = xAngle, camAngleY = yAngle }

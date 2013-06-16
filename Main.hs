@@ -100,7 +100,9 @@ main = do
   GLFW.closeWindow
   GLFW.terminate
 
-defaultModelPath = "models/emitter.obj"
+-- defaultModelPath = "models/emitter.obj"
+-- defaultModelPath = "models/cube.obj"
+defaultModelPath = "models/bigcone.obj"
 
 mainLoop state = do
   -- if stAutoRotate state 
