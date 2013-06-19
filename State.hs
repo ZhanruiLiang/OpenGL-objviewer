@@ -2,6 +2,7 @@ module State where
 
 import Control.Monad
 import Data.Maybe
+import Data.IORef
 
 import Graphics.Rendering.OpenGL as GL
 import Graphics.UI.GLFW as GLFW
@@ -12,6 +13,7 @@ import Camera
 import Menu
 import qualified Config as C
 import HalfEdge
+import LoopSubdiv
 
 data State = State {
     stCamera :: Camera
@@ -64,15 +66,20 @@ subdiv s = do
   let model = stModel s
       divTime = stSubDivTime s
   debug$ "subdiv count: " ++ show divTime
+  vcount <- newIORef (0::Int)
+  fcount <- newIORef (0::Int)
   model' <- case model of
     Nothing -> return model
     Just m  -> return =<< (liftM Just) $ forM m $ \obj -> do
       let hs = objHS obj
           hs' = loopSubdiv hs
       obj' <- convertObj $ obj { objHS = hs' }
-      debug $ "fn = " ++ (show.length.hsFaces$ hs)
-      debug $ "vn = " ++ (show.length.allVertices$ hs)
+      modifyIORef fcount (+(length.hsFaces$hs)) 
+      modifyIORef vcount (+(length.allVertices$hs)) 
       return$! obj'
+  vc <- readIORef vcount
+  fc <- readIORef fcount
+  debug$ "fc: "++show fc++" vc:"++show vc
   return s { stModel = model', stSubDivTime = (divTime + 1) }
 
 disable a b s = if stSubDivTime s > 0 && a s then return =<< b s else return s

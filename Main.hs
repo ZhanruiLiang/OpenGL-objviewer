@@ -21,6 +21,7 @@ renderObj :: State -> Object -> IO ()
 renderObj state obj = do
   let hasMat = isJust.objMaterial$ obj
   let material = fromJust.objMaterial$ obj
+  -- debug $ "render"
   preservingMatrix $ do
     when hasMat $ do
       when (stMaterialEnable state) $ do
@@ -100,9 +101,12 @@ main = do
   GLFW.closeWindow
   GLFW.terminate
 
--- defaultModelPath = "models/emitter.obj"
+defaultModelPath = "models/emitter.obj"
 -- defaultModelPath = "models/cube.obj"
-defaultModelPath = "models/bigcone.obj"
+-- defaultModelPath = "models/bigcone.obj"
+-- defaultModelPath = "models/cone.obj"
+-- defaultModelPath = "models/sintel.obj"
+-- defaultModelPath = "models/plane.obj"
 
 mainLoop state = do
   -- if stAutoRotate state 

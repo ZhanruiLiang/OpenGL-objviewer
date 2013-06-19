@@ -1,7 +1,8 @@
 PROGRAM = Main
 OBJS = Main.o ObjRead.o
 FLAGS = -O3 
-SRCS = Main.hs ObjRead.hs BufTypes.hs Camera.hs State.hs Utils.hs Menu.hs Config.hs HalfEdge.hs
+SRCS = Main.hs ObjRead.hs BufTypes.hs Camera.hs State.hs Utils.hs Menu.hs\
+			 Config.hs HalfEdge.hs LoopSubdiv.hs
 
 test: Main
 	./Main
